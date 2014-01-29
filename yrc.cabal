@@ -14,6 +14,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:
         Yi.YRC
-  build-depends:       base >=4.6 && <5, yi >= 0.7, simpleirc >= 0.3.0
+  build-depends:       base >=4.6 && <5, yi >= 0.7, simpleirc >= 0.3.0,
+                       binary, derive, data-default, lens
   hs-source-dirs:      src
   default-language:    Haskell2010
