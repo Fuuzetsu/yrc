@@ -1,4 +1,4 @@
-name:                yrc
+name:                YRC
 version:             0.1.0.0
 synopsis:            IRC client for Yi
 description:         IRC client for Yi, somewhat based on ERC
