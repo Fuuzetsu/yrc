@@ -3,6 +3,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      :  Yi.YRC
 -- Copyright   :  (c) Mateusz Kowalczyk 2013
@@ -14,19 +15,25 @@
 -- Entry point to and the heart of YRC
 module Yi.YRC where
 
+import Control.Concurrent
+import Control.Monad
+import Control.Monad.Base
+import Control.Monad.Trans.Reader
 import Control.Lens
 import Data.Binary
 import Data.Default
-import Data.DeriveTH
-import Data.Either
 import Data.Typeable
 import Network.SimpleIRC
+import System.IO.Unsafe
 import Yi.Core
 import Yi.Utils
-import Yi.Monad
+
+commChannel :: MVar IrcMessage
+commChannel = unsafePerformIO newEmptyMVar
 
 data YRCState = YRCState { session :: Maybe MIrc
                          , config :: IrcConfig
+                         , comCh :: MVar IrcMessage
                          } deriving Typeable
 
 -- We don't serialise the IO String action required for CTCP,
@@ -38,39 +45,38 @@ data YRCState = YRCState { session :: Maybe MIrc
 -- as we're not making an IRC bot. It'd be nice to have to override default
 -- behaviour of functions but for now we'll stick with defaults.
 instance Binary IrcConfig where
-  put (IrcConfig ad po ni pa us re ch ev cv ct pi) =
-    put ad >> put po >> put ni >> put pa >> put us >> put re
-    >> put ch >> put cv >> put pi
+  put (IrcConfig ad po ni pa us re' ch _ cv _ pi') =
+    put ad >> put po >> put ni >> put pa >> put us >> put re'
+    >> put ch >> put cv >> put pi'
   get = do
     ad <- get
     po <- get
     ni <- get
     pa <- get
     us <- get
-    re <- get
+    re' <- get
     ch <- get
     cv <- get
-    pi <- get
-    return $ IrcConfig ad po ni pa us re ch
-                       [] cv (return "about five o'clock") pi
+    pi' <- get
+    return $ IrcConfig ad po ni pa us re' ch
+                       [] cv (return "about five o'clock") pi'
 
 instance Binary YRCState where
-  put (YRCState s c) = put c
-  get = get >>= \c -> return $ YRCState Nothing c
+  put (YRCState _ c _) = put c
+  get = get >>= \c -> return $ YRCState Nothing c commChannel
     where
 
 instance Default IrcConfig where
   def = IrcConfig "irc.freenode.net" 6667 "YRC_default" Nothing
-                  "YRCuser" "YRC realname" ["#yi"] defaultEvents
+                  "YRCuser" "YRC realname" ["#fuuzetsu"] defaultEvents
                   "YRC 0.1.0.0"
                   (return "always five o'clock")
-                  (350 * 10^(6::Int))
+                  (350 * 10 ^ (6 :: Int))
 
 instance Default YRCState where
-  def = YRCState Nothing def
+  def = YRCState Nothing def commChannel
 
 instance YiVariable YRCState
-
 
 defaultEvents :: [IrcEvent]
 defaultEvents = [ Privmsg $ c2 (putStrLn "Privmsg")
@@ -89,14 +95,22 @@ defaultEvents = [ Privmsg $ c2 (putStrLn "Privmsg")
                 , Disconnect . const $ putStrLn "Disconnect"
                 ]
   where
-    c2 f _ _ = f
+    c2 f _ e = f >> putMVar commChannel e
 
 modYRCState :: (YRCState -> YRCState) -> YiM ()
 modYRCState f = withBuffer $ bufferDynamicValueA %= f
 
+handleEvent :: MVar IrcMessage -> YiM ()
+handleEvent m = do
+--  s <- withBuffer $ use bufferDynamicValueA
+  e <- io . takeMVar $ m
+  msgEditor $ show e
+
 yrc :: YRCState -> YiM ()
-yrc (YRCState ses conf) = do
+yrc st@(YRCState (Just _) _ m) = modYRCState (const st)
+yrc (YRCState Nothing conf _) = do
   msgEditor "yrc starting"
+
   io (connect conf True True) >>= \case
-    Left ioerr -> msgEditor $ "YRC failed to connect."
-    Right ms -> modYRCState (\_ -> YRCState (Just ms) conf)
+    Left _ -> msgEditor $ "YRC failed to connect."
+    Right ms -> modYRCState (\_ -> YRCState (Just ms) conf commChannel)
