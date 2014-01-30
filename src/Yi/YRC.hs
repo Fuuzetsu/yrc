@@ -59,14 +59,15 @@ instance Binary YRCState where
   get = get >>= \c -> return $ YRCState Nothing c
     where
 
+instance Default IrcConfig where
+  def = IrcConfig "irc.freenode.net" 6667 "YRC_default" Nothing
+                  "YRCuser" "YRC realname" ["#yi"] defaultEvents
+                  "YRC 0.1.0.0"
+                  (return "always five o'clock")
+                  (350 * 10^(6::Int))
+
 instance Default YRCState where
-  def = YRCState Nothing conf
-    where
-      conf :: IrcConfig
-      conf = IrcConfig "irc.freenode.net" 6667 "YRC_default" Nothing
-               "YRCuser" "YRC realname" ["#yi"] defaultEvents
-               "YRC 0.1.0.0"
-               (return "always five o'clock") 200
+  def = YRCState Nothing def
 
 instance YiVariable YRCState
 
