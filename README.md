@@ -13,3 +13,6 @@ Instructions will be here once some functionality is present.
 
 
 Licensed under GPLv3, see LICENSE
+
+
+On hiatus until Yi gets some concurrency.
