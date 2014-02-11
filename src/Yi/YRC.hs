@@ -28,6 +28,7 @@ import System.IO.Unsafe
 import Yi.Core
 import Yi.Utils
 
+{-# NOINLINE commChannel #-}
 commChannel :: MVar IrcMessage
 commChannel = unsafePerformIO newEmptyMVar
 
